@@ -1,0 +1,22 @@
+<launch>
+    <!--모바일로봇 URDF 모델을 매개변수 서버로 적재-->
+    <param name="robot_description" textfile="$(find myrobot)/urdf/mobile_robot.urdf"/>
+    <arg name="x_pos" default="18"/>
+    <arg name="y_pos" default="11"/>
+    <arg name="z_pos" default="0.3"/>
+    <!--arg name="yaw" default="2.35"/-->
+    
+    <!--빈 세계와 함께 가제보 시작-->
+    <include file="$(find gazebo_ros)/launch/empty_world.launch">
+        <arg name="world_name" value="$(find myrobot)/worlds/interchange.world"/>    
+    </include>
+    
+    <!--매개변수 서버로 부터 로봇에 대한 설명(robot_description)을 받아 가제보에서 모바일로봇 실행-->
+    <node name="spawn_urdf" pkg="gazebo_ros" type="spawn_model" args="-param robot_description -urdf -model mobile_robot -x $(arg x_pos) -y $(arg y_pos) -z $(arg z_pos)"/> <!-- -Y $(arg yaw) -->
+          
+    <node pkg="myrobot" type="key_publisher.py" name="keyboard_driver"/>
+    <node pkg="myrobot" type="keys_to_twist.py" name="keys_to_twist"/>
+    <!--node pkg="myrobot" type="cam_test.py" name="gazebocam"/ -->
+    <node pkg="myrobot" type="lane_detect.py" name="LaneDetection"/>
+    
+</launch>

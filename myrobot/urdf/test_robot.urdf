@@ -1,0 +1,340 @@
+<?xml version="1.0"?>
+<robot name="mobile_robot">
+<!--materials : http://wiki.ros.org/simulator_gazebo/Tutorials/ListOfMaterials-->
+
+
+    <link name="base">
+        <visual>
+            <geometry>
+                <box size="0.45 0.3 0.21"/>
+            </geometry>
+        </visual>
+        <collision>
+            <geometry>
+                <box size="0.45 0.3 0.21"/>
+            </geometry>
+        </collision>
+        <inertial>
+            <mass value="8.0"/> <!--8kg-->
+            <inertia ixx="0.0894" iyy="0.1644" izz="0.195" ixy="0" ixz="0" iyz="0"/>
+        </inertial>
+    </link>
+    
+    <gazebo reference="base">
+        <material>Gazebo/Gold</material>
+    </gazebo>
+    
+    
+    <link name="camera_link">
+        <visual>
+            <geometry>
+                <box size="0.03 0.03 0.5"/>
+            </geometry>
+        </visual>
+        <collision>
+            <geometry>
+                <box size="0.03 0.03 0.5"/>
+            </geometry>
+        </collision>
+        <inertial>
+            <mass value="1"/> <!--1kg-->
+            <inertia ixx="0.0209" iyy="0.0209" izz="0.5e-4" ixy="0" ixz="0" iyz="0"/>
+        </inertial>
+    </link>
+    
+    <gazebo reference="camera_link">
+        <material>Gazebo/Gold</material>
+    </gazebo>
+    
+    <joint name="camera_link_joint" type="fixed">
+        <axis xyz="0 0 0"/>
+        <parent link="base"/>
+        <child link="camera_link"/>
+        <origin rpy="0 0 0" xyz="0.21 0 0.355"/>
+    </joint>
+    
+    
+    
+    
+    
+    
+    <link name="caster">
+        <visual>
+            <geometry>
+                <sphere radius="0.0475"/>
+            </geometry>
+            <material name="black">
+                <color rgba="0 0 0 1"/>
+            </material>
+            
+        </visual>
+        <collision>
+            <geometry>
+                <sphere radius="0.0475"/>
+            </geometry>
+            
+        </collision>
+        <inertial>
+            <mass value="0.1"/> <!--0.1kg-->
+            <inertia ixx="9.025e-5" iyy="9.025e-5" izz="9.025e-4" ixy="0" ixz="0" iyz="0"/>
+        </inertial>
+    </link>
+    
+    <joint name="caster_joint" type="fixed">
+        <axis xyz="0 0 0"/>
+        <parent link="base"/>
+        <child link="caster"/>
+        <origin rpy="0 0 0" xyz="0.1775 0 -0.105"/>
+    </joint>
+    
+    <gazebo reference="caster">
+        <mu1>0</mu1>
+        <mu2>0</mu2>
+        <slip1>1.0</slip1>
+        <slip2>1.0</slip2>
+        <material>Gazebo/FlatBlack</material>
+    </gazebo>
+    
+    
+    
+    
+    
+    
+    
+    <link name="Left_Wheel_B">
+        <visual>
+            <geometry>
+                <cylinder length="0.04" radius="0.0475"/>
+            </geometry>
+            <material name="black">
+                <color rgba="0 0 0 1"/>
+            </material>
+            
+        </visual>
+        <collision>
+            <geometry>
+                <cylinder length="0.04" radius="0.0475"/>
+            </geometry>
+        </collision>
+        <inertial>
+            <mass value="0.1"/> <!--0.1kg-->
+            <inertia ixx="6.974e-5" iyy="6.974e-5" izz="1.128e-4" ixy="0" ixz="0" iyz="0"/>
+        </inertial>
+    </link>
+    
+    <joint name="Left_Wheel_B_joint" type="continuous">
+        <axis xyz="0 0 1"/>
+        <parent link="base"/>
+        <child link="Left_Wheel_B"/>
+        <origin rpy="-1.570796 0 0" xyz="-0.095 0.15 -0.105"/>
+    </joint>
+    
+    <gazebo reference="Left_Wheel_B">
+        <mu1>0.5</mu1>
+        <mu2>0.5</mu2>
+        <material>Gazebo/FlatBlack</material>
+    </gazebo>
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    <link name="Right_Wheel_B">
+        <visual>
+            <geometry>
+                <cylinder length="0.04" radius="0.0475"/>
+            </geometry>
+            <material name="black">
+                <color rgba="0 0 0 1"/>
+            </material>
+            
+        </visual>
+        <collision>
+            <geometry>
+                <cylinder length="0.04" radius="0.0475"/>
+            </geometry>
+        </collision>
+        <inertial>
+            <mass value="0.1"/> <!--0.1kg-->
+            <inertia ixx="6.974e-5" iyy="6.974e-5" izz="1.128e-4" ixy="0" ixz="0" iyz="0"/>
+        </inertial>
+    </link>
+    
+    <joint name="Right_Wheel_B_joint" type="continuous">
+        <axis xyz="0 0 1"/>
+        <parent link="base"/>
+        <child link="Right_Wheel_B"/>
+        <origin rpy="-1.570796 0 0" xyz="-0.095 -0.15 -0.105"/>
+    </joint>
+    
+    <gazebo reference="Right_Wheel_B">
+        <mu1>0.5</mu1>
+        <mu2>0.5</mu2>
+        <material>Gazebo/FlatBlack</material>
+    </gazebo>
+    
+    
+    
+    
+    
+    
+    <link name="camera">
+        <visual>
+            <geometry>
+                <box size="0.03 0.03 0.03"/>
+            </geometry>
+        </visual>
+        <collision>
+            <geometry>
+                <box size="0.03 0.03 0.03"/>
+            </geometry>
+        </collision>
+        <inertial>
+            <mass value="0.05"/> 
+            <inertia ixx="7.5e-6" iyy="7.5e-6" izz="7.5e-6" ixy="0" ixz="0" iyz="0"/>
+        </inertial>
+    </link>
+    
+    <gazebo reference="camera">
+        <material>Gazebo/Black</material>
+        <sensor type="camera" name="camera">
+            <always_on>true</always_on>
+            <visualize>true</visualize>
+            <camera>
+                <horizontal_fov>1.085595</horizontal_fov>
+                <image>
+                    <width>640</width>
+                    <height>480</height>
+                    <format>R8G8B8</format>
+                </image>
+                <clip>
+                    <near>0.03</near>
+                    <far>100</far>
+                </clip>
+            </camera>
+            <plugin name="camera_controller" filename="libgazebo_ros_camera.so">
+                <alwaysOn>true</alwaysOn>
+                <updateRate>30.0</updateRate>
+                <cameraName>camera</cameraName>
+                <frameName>camera_rgb_optical_frame</frameName>
+                <imageTopicName>rgb/image_raw</imageTopicName>
+                <cameraInfoTopicName>rgb/camera_info</cameraInfoTopicName>
+                <hackBaseline>0.07</hackBaseline>
+                <distortionK1>0.0</distortionK1>
+                <distortionK2>0.0</distortionK2>
+                <distortionK3>0.0</distortionK3>
+                <distortionT1>0.0</distortionT1>
+                <distortionT2>0.0</distortionT2>
+            </plugin>
+        </sensor>
+    </gazebo>
+    
+    <joint name="camera_joint" type="fixed">
+        <axis xyz="0 0 0"/>
+        <parent link="camera_link"/>
+        <child link="camera"/>
+        <origin rpy="0 0.2 0" xyz="0.03 0 0.22"/>
+    </joint>
+    
+    
+    
+    
+    <link name="lidar">
+        <visual>
+            <origin xyz="0 0 0" rpy="0 0 0"/>
+            <geometry>
+                <cylinder length="0.04" radius="0.035"/>
+            </geometry>
+        </visual>
+        <collision>
+            <origin xyz="0 0 0" rpy="0 0 0"/>
+            <geometry>
+                <cylinder length="0.04" radius="0.035"/>
+            </geometry>
+        </collision>
+        <inertial>
+            <mass value="0.1"/> 
+            <inertia ixx="4.396e-5" iyy="4.396e-5" izz="6.125e-5" ixy="0" ixz="0" iyz="0"/>
+        </inertial>
+    </link>
+    
+    <gazebo reference="lidar">
+        <material>Gazebo/FlatBlack</material>
+        <sensor type="ray" name="LIDAR">
+            <pose>0 0 0 0 0 0</pose>
+            <visualize>true</visualize>
+            <update_rate>40</update_rate>
+            <ray>
+                <scan>
+                    <horizontal>    <!-- 2D LiDAR -->
+                    <samples>360</samples>
+                    <resolution>1</resolution>  <!--1도 간격 -->
+                    <min_angle>-1.570796</min_angle><!-- -90부터 -->
+                    <max_angle>1.570796</max_angle> <!-- +90까지 -->
+                  </horizontal>
+                </scan>
+            <range>
+                <min>0.1</min>  <!--min 0.1m -->
+                <max>5.0</max>  <!--max 5.0m -->
+                <resolution>0.01</resolution>
+            </range>
+        </ray>
+        <plugin name="lidar_controller" filename="libgazebo_ros_laser.so">
+          <topicName>scan</topicName>
+          <frameName>lidar</frameName>
+        </plugin>
+      </sensor>
+    </gazebo>
+    
+    <joint name="lidar_joint" type="fixed">
+        <axis xyz="0 1 0"/>
+        <parent link="base"/>
+        <child link="lidar"/>
+        <origin rpy="0 0 0" xyz="0.225 0 -0.065"/>
+    </joint>
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    <gazebo>
+        <plugin name="gazebo_controller_test" filename="libgazebo_ros_diff_drive.so">
+            <commandTopic>cmd_vel</commandTopic>
+            <odometryTopic>odom</odometryTopic>
+            <odometryFrame>odom</odometryFrame>
+            <odometrySource>world</odometrySource>
+            <publishOdomTF>true</publishOdomTF>
+            <publishTf>true</publishTf>
+            <leftJoint>Left_Wheel_B_joint</leftJoint>
+            <rightJoint>Right_Wheel_B_joint</rightJoint>
+            <robotBaseFrame>base</robotBaseFrame>
+            <wheelSeparation>0.3</wheelSeparation>
+            <wheelDiameter>0.095</wheelDiameter>
+            <publishWheelJointState>true</publishWheelJointState>
+            <wheelTorque>10</wheelTorque>
+        </plugin>
+    </gazebo>
+
+
+
+
+    
+        
+    
+
+</robot>
+
+
+
+
+

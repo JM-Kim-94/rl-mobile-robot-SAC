@@ -1,0 +1,30 @@
+<launch>
+    <!--모바일로봇 URDF 모델을 매개변수 서버로 적재-->
+    <param name="robot_description" textfile="$(find myrobot)/urdf/mobile_robot_dqn_2.urdf"/>
+    <arg name="x_pos1" default="0"/>
+    <arg name="y_pos1" default="0"/>
+    <arg name="z_pos1" default="0.2"/>
+    
+    <!--빈 세계와 함께 가제보 시작-->
+    <include file="$(find gazebo_ros)/launch/empty_world.launch">
+        <arg name="world_name" value="$(find myrobot)/worlds/12_new_fire_hydrant_wide_empty.world"/> 
+        <!--arg name="world_name" value="$(find myrobot)/worlds/sac_moving_obstacles.world"/-->    
+    </include>
+    
+    <!--장애물 움직이기-->
+    <!--node pkg="myrobot"  type="moving_obstacle.py" name="moving_obstacles" output="screen" /-->
+    
+    <!--매개변수 서버로 부터 로봇에 대한 설명(robot_description)을 받아 가제보에서 모바일로봇 실행-->
+    <node name="spawn_urdf" pkg="gazebo_ros" type="spawn_model" args="-param robot_description -urdf -model mobile_robot_dqn_2 -x $(arg x_pos1) -y $(arg y_pos1) -z $(arg z_pos1)"/>           
+
+         
+    <!--테스트-->
+   <node pkg="myrobot" type="mobile_robot_SAC_2act_test.py" name="mobile_robot_sac_test" output="screen"/> 
+    
+    
+    
+</launch>
+
+
+
+

@@ -1,0 +1,55 @@
+<launch>
+    <!--roslaunch myrobot seungmin_dqn_mobile_robot_ICworld.launch-->
+    <!--모바일로봇 URDF 모델을 매개변수 서버로 적재-->
+    <param name="robot_description" textfile="$(find myrobot)/urdf/mobile_robot_dqn_2.urdf"/>
+    <arg name="x_pos" default="0"/>
+    <arg name="y_pos" default="0"/>
+    <arg name="z_pos" default="0.12"/>
+    <!--arg name="yaw" default="2.35"/-->
+    
+    <!--빈 세계와 함께 가제보 시작-->
+    <include file="$(find gazebo_ros)/launch/empty_world.launch">
+        <arg name="world_name" value="$(find myrobot)/worlds/12_new_fire_hydrant.world"/>    
+    </include>
+    
+    
+    
+    
+    
+        
+    <!--매개변수 서버로 부터 로봇에 대한 설명(robot_description)을 받아 가제보에서 모바일로봇 실행-->
+    <node name="spawn_urdf" pkg="gazebo_ros" type="spawn_model" args="-param robot_description -urdf -model mobile_robot_dqn_2 -x $(arg x_pos) -y $(arg y_pos) -z $(arg z_pos)" />           
+    <!-- -Y $(arg yaw) -->
+          
+    <!--키보드 동작-->
+    <!--node pkg="myrobot" type="key_publisher.py" name="keyboard_driver"/-->
+    <!--node pkg="myrobot" type="keys_to_twist.py" name="keys_to_twist"/-->
+    
+    <!--카메라 동작, 차선인식-->
+    <!--node pkg="myrobot" type="cam_test.py" name="gazebocam"/-->
+    <!--node pkg="myrobot" type="lane_detect.py" name="LaneDetection" /-->
+    <!--node pkg="myrobot" type="listner.py" name="listner" output="screen"/-->
+    
+    <!--학습시-->
+    <!--node pkg="myrobot" type="dqn_LIDAR.py" name="mobile_robot_dqn" output="screen"/--> 
+    
+    <!--테스트시-->
+    <node pkg="myrobot" type="dqn_LIDAR_test.py" name="mobile_robot_dqn_test" output="screen"/>
+    
+    <!--그래프 확인-->
+    <!--node pkg="myrobot" type="action_graph" name="ActionGraph"/-->
+    <!--node pkg="myrobot" type="plot_score.py" name="graph_node" /-->
+    <!--node pkg="myrobot" type="plot_loss.py"  name="loss_graph_node" /-->
+    
+    
+    <!--오도메트리 확인-->
+    <!--node pkg="myrobot" type="get_odom.py" name="subs_odom" output="screen"/-->
+    
+    
+    
+    
+</launch>
+
+
+
+

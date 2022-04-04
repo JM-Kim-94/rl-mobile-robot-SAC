@@ -1,0 +1,366 @@
+#!/usr/bin/env python3
+
+
+import rospy
+import numpy as np
+import matplotlib.pyplot as plt
+import random
+import time
+import sys
+import os
+import shutil
+sys.path.append(os.path.dirname(os.path.abspath(os.path.dirname(__file__))))
+from collections import deque
+from collections import namedtuple
+from std_msgs.msg import Float32MultiArray
+import torch
+import torch.nn as nn
+import torch.optim as optim
+import torch.nn.functional as F
+from torch.autograd import Variable
+from torch.distributions import Categorical
+from torch.distributions import Normal
+
+
+import GPUtil
+import psutil
+from threading import Thread
+import time
+
+from env_mobile_robot_SAC_new import Env
+
+from torch.utils.tensorboard import SummaryWriter
+
+from std_srvs.srv import Empty
+
+from collections import namedtuple
+import collections, random
+
+
+
+
+
+class Monitor(Thread):
+    def __init__(self, delay):
+        super(Monitor, self).__init__()
+        self.stopped = False
+        self.delay = delay # Time between calls to GPUtil
+        self.start()
+
+    def run(self):
+        while not self.stopped:
+            GPUtil.showUtilization()
+            print("CPU percentage: ", psutil.cpu_percent())
+            print('CPU virtual_memory used:', psutil.virtual_memory()[2], "\n")
+            time.sleep(self.delay)
+
+    def stop(self):
+        self.stopped = True
+
+
+class ReplayBuffer():
+    def __init__(self, buffer_limit):
+        self.buffer = collections.deque(maxlen=buffer_limit)
+
+    def put(self, transition):
+        self.buffer.append(transition)
+    
+    def sample(self, n, DEVICE):
+        mini_batch = random.sample(self.buffer, n)
+        s_lst, a_lst, r_lst, s_prime_lst, done_mask_lst = [], [], [], [], []
+
+        for transition in mini_batch:
+            s, a, r, s_prime, done = transition
+            s_lst.append(s)
+            a_lst.append(a)
+            r_lst.append([r])
+            s_prime_lst.append(s_prime)
+            done_mask = 0.0 if done else 1.0 
+            done_mask_lst.append([done_mask])            
+        
+        s_batch       = torch.tensor(s_lst, dtype=torch.float).to(DEVICE)
+        a_batch       = torch.tensor(a_lst, dtype=torch.float).to(DEVICE)
+        r_batch       = torch.tensor(r_lst, dtype=torch.float).to(DEVICE)
+        s_prime_batch = torch.tensor(s_prime_lst, dtype=torch.float).to(DEVICE)
+        done_batch    = torch.tensor(done_mask_lst, dtype=torch.float).to(DEVICE)
+        
+        #r_batch = (r_batch - r_batch.mean()) / (r_batch.std() + 1e-7)
+        
+        return s_batch, a_batch, r_batch, s_prime_batch, done_batch        
+    
+    def size(self):
+        return len(self.buffer)
+        
+        
+class PolicyNet(nn.Module):
+    def __init__(self, learning_rate, init_alpha, target_entropy, lr_alpha, DEVICE):
+        super(PolicyNet, self).__init__()
+        
+        self.learning_rate  = learning_rate
+        self.init_alpha     = init_alpha
+        self.target_entropy = target_entropy
+        self.lr_alpha       = lr_alpha
+        
+        self.fc1 = nn.Linear(4, 200)
+        self.fc2 = nn.Linear(200, 200)
+        self.fc3 = nn.Linear(200, 100)
+        self.fc4 = nn.Linear(100, 64)
+        self.fc_mu = nn.Linear(64,2)
+        self.fc_std  = nn.Linear(64,2)
+        self.optimizer = optim.Adam(self.parameters(), lr=self.learning_rate)
+        
+        self.log_alpha = torch.tensor(np.log(self.init_alpha)).to(DEVICE)
+        self.log_alpha.requires_grad = True
+        self.log_alpha_optimizer = optim.Adam([self.log_alpha], lr=self.lr_alpha)
+
+    def forward(self, x):
+        x = F.leaky_relu(self.fc1(x))
+        x = F.leaky_relu(self.fc2(x))
+        x = F.leaky_relu(self.fc3(x))
+        x = F.leaky_relu(self.fc4(x))
+        mu = self.fc_mu(x)
+        std = F.softplus(self.fc_std(x))
+        dist = Normal(mu, std)
+        action = dist.rsample()
+        log_prob = dist.log_prob(action)
+        real_action = torch.tanh(action)
+        real_log_prob = log_prob - torch.log(1-torch.tanh(action).pow(2) + 1e-7)
+        return real_action, real_log_prob
+
+    
+
+class QNet(nn.Module):
+    def __init__(self, learning_rate, tau):
+        super(QNet, self).__init__()
+        
+        self.learning_rate = learning_rate
+        self.tau           = tau
+        
+        self.fc_s = nn.Linear(4, 100)
+        self.fc_a = nn.Linear(2, 100)
+        self.fc_1 = nn.Linear(200, 200)
+        self.fc_2 = nn.Linear(200, 100) 
+        self.fc_3 = nn.Linear(100, 64)        
+        self.fc_out = nn.Linear(64, 2)
+        self.optimizer = optim.Adam(self.parameters(), lr=self.learning_rate)
+
+    def forward(self, x, a):
+        h1 = F.leaky_relu(self.fc_s(x))
+        h2 = F.leaky_relu(self.fc_a(a))
+        cat = torch.cat([h1,h2], dim=-1)
+        q = F.leaky_relu(self.fc_1(cat))
+        q = F.leaky_relu(self.fc_2(q))
+        q = F.leaky_relu(self.fc_3(q))
+        q = self.fc_out(q)
+        return q
+
+
+    def soft_update(self, net_target):
+        for param_target, param in zip(net_target.parameters(), self.parameters()):
+            param_target.data.copy_(param_target.data * (1.0 - self.tau) + param.data * self.tau)
+
+
+
+
+
+class Agent:
+
+    def __init__(self):    
+        self.lr_pi           = 0.0001
+        self.lr_q            = 0.0005
+        self.init_alpha      = 8
+        self.gamma           = 0.98
+        self.batch_size      = 200
+        self.buffer_limit    = 500000
+        self.tau             = 0.001    # for target network soft update
+        self.target_entropy  = -2.5       # for automated alpha update
+        self.lr_alpha        = 0.001    # for automated alpha update
+        self.DEVICE          = torch.device("cuda" if torch.cuda.is_available() else "cpu")
+        print("DEVICE : ", self.DEVICE)
+        
+        self.memory = ReplayBuffer(self.buffer_limit)
+        
+        self.q1        = QNet(self.lr_q , self.tau).to(self.DEVICE)
+        self.q1_target = QNet(self.lr_q , self.tau).to(self.DEVICE)
+        self.q2        = QNet(self.lr_q , self.tau).to(self.DEVICE)
+        self.q2_target = QNet(self.lr_q , self.tau).to(self.DEVICE)
+        
+        self.pi = PolicyNet(self.lr_pi, self.init_alpha, self.target_entropy, self.lr_alpha, self.DEVICE).to(self.DEVICE)
+
+        self.q1_target.load_state_dict(self.q1.state_dict())
+        self.q2_target.load_state_dict(self.q2.state_dict())
+
+    def choose_action(self, state):
+        with torch.no_grad():
+            a, log_prob= self.pi(torch.FloatTensor(state).to(self.DEVICE))
+            real_action = [a[0]*1.5 , (a[1]+1)/4]  
+            # angular is in [-1.5,1.5] , linear is in [0,0.5]
+        return a, log_prob, real_action
+    
+    def calc_target(self, mini_batch):
+        s, a, r, s_prime, done = mini_batch
+
+        with torch.no_grad():
+            a_prime, log_prob = self.pi(s_prime)
+            entropy = -self.pi.log_alpha.exp() * log_prob
+            q1_val, q2_val = self.q1_target(s_prime,a_prime), self.q2_target(s_prime,a_prime)
+            q1_q2 = torch.cat([q1_val, q2_val], dim=1)
+            min_q = torch.min(q1_q2, 1, keepdim=True)[0]
+            target = r + self.gamma * done * (min_q + entropy)
+
+        return target
+        
+    def agent_train(self):
+        mini_batch = self.memory.sample(self.batch_size, self.DEVICE)
+        s_batch, a_batch, r_batch, s_prime_batch, done_batch = mini_batch
+        
+        td_target  = self.calc_target(mini_batch)        
+        
+        #### Q1 train ####        
+        q1_loss = F.smooth_l1_loss(self.q1(s_batch, a_batch) , td_target)
+        self.q1.optimizer.zero_grad()
+        q1_loss.mean().backward()
+        #nn.utils.clip_grad_norm_(self.q1.parameters(), 2.0)
+        self.q1.optimizer.step()
+        #### Q1 train ####
+        
+        #### Q2 train ####        
+        q2_loss = F.smooth_l1_loss(self.q2(s_batch, a_batch) , td_target)
+        self.q2.optimizer.zero_grad()
+        q2_loss.mean().backward()
+        #nn.utils.clip_grad_norm_(self.q2.parameters(), 2.0)
+        self.q2.optimizer.step()
+        #### Q2 train ####
+        
+        
+        #### pi train ####
+        a, log_prob = self.pi(s_batch)
+        entropy = -self.pi.log_alpha.exp() * log_prob
+
+        q1_val, q2_val = self.q1(s_batch, a), self.q2(s_batch, a)
+        q1_q2 = torch.cat([q1_val, q2_val], dim=1)
+        min_q = torch.min(q1_q2, 1, keepdim=True)[0]
+
+        pi_loss = -(min_q + entropy) # for gradient ascent
+        self.pi.optimizer.zero_grad()
+        pi_loss.mean().backward()
+        #nn.utils.clip_grad_norm_(self.pi.parameters(), 2.0)
+        self.pi.optimizer.step()
+        #### pi train ####
+        
+        #### alpha train ####
+        self.pi.log_alpha_optimizer.zero_grad()
+        alpha_loss = -(self.pi.log_alpha.exp() * (log_prob + self.target_entropy).detach()).mean()
+        alpha_loss.backward()        
+        self.pi.log_alpha_optimizer.step()
+        #### alpha train ####       
+        
+        
+        #### Q1, Q2 soft-update #### 
+        self.q1.soft_update(self.q1_target)
+        self.q2.soft_update(self.q2_target) 
+        #### Q1, Q2 soft-update #### 
+
+
+
+if __name__ == '__main__':
+    rospy.init_node('mobile_robot_sac')
+    
+    date = '1220_2'
+    save_dir = "/home/jm-kim/catkin_ws/src/myrobot/src/SAC/saved_model/" + date 
+    if not os.path.isdir(save_dir):
+        os.mkdir(save_dir)
+    save_dir += "/"
+        
+    shutil.copyfile('/home/jm-kim/catkin_ws/src/myrobot/src/SAC/env_mobile_robot_SAC_new.py', save_dir+'env.txt')
+    shutil.copyfile('/home/jm-kim/catkin_ws/src/myrobot/src/SAC/mobile_robot_SAC_2act.py', save_dir+'agt.txt')
+    
+    monitor = Monitor(60)
+        
+    writer = SummaryWriter('SAC_log/'+date)
+    
+    state_size = 4
+    action_size = 2
+    
+    EPISODE       = 10000
+    MAX_STEP_SIZE = 3000
+    
+    sim_rate = rospy.Rate(100)
+    #unpause_proxy = rospy.ServiceProxy('gazebo/unpause_physics', Empty)
+    #pause_proxy = rospy.ServiceProxy('gazebo/pause_physics', Empty)
+    
+    env = Env(action_size)
+    agent = Agent()
+    print_once = True
+
+    for n_epi in range(EPISODE):
+        s = env.reset(n_epi)
+        done = False
+        score = 0.0 #, q, ent, actor_loss, alpha = 0.0, 0.0, 0.0, 0.0, 0.0
+        
+        for step in range(MAX_STEP_SIZE): 
+        
+            a, log_prob, real_action = agent.choose_action(s)
+            
+            s_prime, r, done, info = env.step(real_action, n_epi)
+            
+            agent.memory.put((s, a.detach().cpu().numpy(), r, s_prime, done))
+            
+            score += r
+            
+            s = s_prime
+            
+            if done:
+                s = env.reset(n_epi)             
+        
+            if agent.memory.size() >  10000:
+                if print_once: print("학습시작!")
+                print_once = False
+                
+                agent.agent_train()                
+                
+            if agent.memory.size() <= 10000:
+                sim_rate.sleep()         
+        
+        print("EP:{}, Avg_Score:{:.1f}".format(n_epi, score)) 
+        writer.add_scalar("Score", score, n_epi)
+        #print("EP:{}, Avg_Score:{:.1f}, Q:{:.1f}, Entr:{:.1f}, Act_los:{:.1f}, Alpha:{:.3f}".format(n_epi, score, q/3000, ent/3000, actor_loss/3000, pi.log_alpha.exp()))
+        #writer.add_scalar("Q_Value", q/3000, n_epi)
+        #writer.add_scalar("Entropy", ent/3000 ,n_epi)
+        #writer.add_scalar("Actor_Loss", actor_loss/3000 ,n_epi)
+        #writer.add_scalar("alpha", alpha/3000 ,n_epi)
+        
+        #if pi.log_alpha.exp() > 1.0:
+        #    pi.log_alpha += np.log(0.99)
+        
+        #if n_epi%print_interval==0 and n_epi!=0:
+        #    print("# of episode :{}, avg score : {:.1f} alpha:{:.4f}".format(n_epi, score/print_interval, pi.log_alpha.exp()))
+        #    writer.add_scalar("Score", score / print_interval, n_epi)
+        #    score = 0.0
+            
+        if n_epi % 2 == 0: 
+            torch.save(agent.pi.state_dict(), save_dir + "sac_actor_"+date+"_EP"+str(n_epi)+".pt")
+
+
+
+
+
+
+
+
+
+
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+

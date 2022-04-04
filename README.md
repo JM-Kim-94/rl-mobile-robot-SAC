@@ -5,6 +5,7 @@ The mobile robot is designed and simulated in Gazebo 3D Simulator and ROS.
 
 # Requirements
 * updating...
+* updating...
 
 # Train
 <img src="images/mobile_robot_SAC_EP4.gif">

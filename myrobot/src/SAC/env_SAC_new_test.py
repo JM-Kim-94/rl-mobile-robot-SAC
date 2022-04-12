@@ -65,10 +65,10 @@ class Env():
         
         # 서브스크라이버
         self.sub_odom = rospy.Subscriber('odom', Odometry, self.getOdometry)
-        self.sub_scan = rospy.Subscriber('scan', LaserScan, self.getScanData) # 내가 만든거
+        self.sub_scan = rospy.Subscriber('scan', LaserScan, self.getScanData) 
         self.scan = LaserScan()
         
-    def getScanData(self, scan_msg): # 내가 만든거 
+    def getScanData(self, scan_msg):
         self.scan = scan_msg        
 
     def getGoalDistace(self):
